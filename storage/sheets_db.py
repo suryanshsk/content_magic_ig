@@ -7,7 +7,7 @@ Never calls append_row() in a loop — always uses append_rows() for batching.
 from datetime import datetime, timezone, timedelta
 import gspread
 from google.oauth2.service_account import Credentials
-from config import GOOGLE_SHEETS_CREDS, SHEET_NAME
+from config import GOOGLE_SHEETS_CREDS, SHEET_NAME, GOOGLE_SHEET_ID
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -69,14 +69,29 @@ def connect() -> gspread.Client:
 
 
 def get_or_create_workbook(client: gspread.Client) -> gspread.Spreadsheet:
+    if GOOGLE_SHEET_ID:
+        try:
+            wb = client.open_by_key(GOOGLE_SHEET_ID)
+            _log(f"Opened workbook by ID: {GOOGLE_SHEET_ID}")
+            return wb
+        except Exception as e:
+            _log(f"Open by sheet ID failed: {e}")
+
     try:
         wb = client.open(SHEET_NAME)
         _log(f"Opened existing workbook: {SHEET_NAME}")
         return wb
     except gspread.SpreadsheetNotFound:
-        wb = client.create(SHEET_NAME)
-        _log(f"Created new workbook: {SHEET_NAME}")
-        return wb
+        try:
+            wb = client.create(SHEET_NAME)
+            _log(f"Created new workbook: {SHEET_NAME}")
+            return wb
+        except Exception as e:
+            raise RuntimeError(
+                "Unable to open or create Google Sheet. "
+                "Share an existing sheet with the service account and set "
+                "GOOGLE_SHEET_NAME or GOOGLE_SHEET_ID in .env."
+            ) from e
 
 
 def setup_all_sheets(wb: gspread.Spreadsheet) -> None:

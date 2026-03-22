@@ -14,8 +14,8 @@ APIFY_ACTOR_ID         = "apify/instagram-scraper"
 APIFY_MONTHLY_LIMIT    = 95          # stop at 95 to leave buffer before hard 100 limit
 
 RAPIDAPI_KEY           = os.getenv("RAPIDAPI_KEY", "")
-RAPIDAPI_HOST          = "instagram-scraper-api2.p.rapidapi.com"
-RAPIDAPI_BASE_URL      = "https://instagram-scraper-api2.p.rapidapi.com/v1"
+RAPIDAPI_HOST          = os.getenv("RAPIDAPI_HOST", "instagram-scraper-api2.p.rapidapi.com")
+RAPIDAPI_BASE_URL      = os.getenv("RAPIDAPI_BASE_URL", "https://instagram-scraper-api2.p.rapidapi.com/v1")
 RAPIDAPI_MONTHLY_LIMIT = 480         # stop at 480 before hard 500 limit
 
 TELEGRAM_BOT_TOKEN     = os.getenv("TELEGRAM_BOT_TOKEN", "")
@@ -25,7 +25,9 @@ ANTHROPIC_API_KEY      = os.getenv("ANTHROPIC_API_KEY", "")
 CLAUDE_MODEL           = "claude-sonnet-4-20250514"
 
 GOOGLE_SHEETS_CREDS    = os.getenv("GOOGLE_SHEETS_CREDS", "credentials.json")
-SHEET_NAME             = "ContentMagic_suryanshsk"
+GOOGLE_SHEET_NAME      = os.getenv("GOOGLE_SHEET_NAME", "ContentMagic_suryanshsk")
+GOOGLE_SHEET_ID        = os.getenv("GOOGLE_SHEET_ID", "")
+SHEET_NAME             = GOOGLE_SHEET_NAME
 
 # ── SCRAPING SETTINGS ───────────────────────────────────────────────────────
 SCRAPE_REELS_COUNT       = 12     # fetch last 12 reels per creator

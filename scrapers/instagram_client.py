@@ -69,7 +69,10 @@ def get_reels(username: str, count: int = 12) -> list:
     # ── Try Apify first ──────────────────────────────────────────────────────
     if should_use_apify():
         try:
-            return _apify_reels(username, count)
+            apify_reels = _apify_reels(username, count)
+            if apify_reels:
+                return apify_reels
+            _log(f"Apify returned 0 reels for @{username} — trying RapidAPI fallback")
         except ApifyQuotaError as e:
             _log(f"Apify quota hit — switching to RapidAPI. ({e})")
         except ApifyError as e:
