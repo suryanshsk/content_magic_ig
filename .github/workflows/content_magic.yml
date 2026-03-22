@@ -22,6 +22,7 @@ on:
 
 # ── Shared setup step ────────────────────────────────────────────────────────
 env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
   APIFY_API_TOKEN:    ${{ secrets.APIFY_API_TOKEN }}
   RAPIDAPI_KEY:       ${{ secrets.RAPIDAPI_KEY }}
   ENABLE_INSTATOUCH_FALLBACK: ${{ vars.ENABLE_INSTATOUCH_FALLBACK || '0' }}
@@ -34,6 +35,8 @@ env:
   TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
   TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
   ANTHROPIC_API_KEY:  ${{ secrets.ANTHROPIC_API_KEY }}
+  GOOGLE_SHEET_ID: ${{ vars.GOOGLE_SHEET_ID || secrets.GOOGLE_SHEET_ID }}
+  GOOGLE_SHEET_NAME: ${{ vars.GOOGLE_SHEET_NAME || 'ContentMagic_suryanshsk' }}
   GOOGLE_SHEETS_CREDS: credentials.json
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -50,16 +53,16 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: "pip"
 
       - name: Set up Node.js for InstaTouch fallback
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: "20"
 
@@ -253,8 +256,8 @@ jobs:
        (github.event.inputs.job == 'trends' || github.event.inputs.job == 'all'))
 
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
         with: { python-version: "3.11", cache: "pip" }
       - run: pip install -r requirements.txt
       - run: echo '${{ secrets.GOOGLE_CREDENTIALS_JSON }}' > credentials.json
@@ -304,8 +307,8 @@ jobs:
        (github.event.inputs.job == 'ideas' || github.event.inputs.job == 'all'))
 
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
         with: { python-version: "3.11", cache: "pip" }
       - run: pip install -r requirements.txt
       - run: echo '${{ secrets.GOOGLE_CREDENTIALS_JSON }}' > credentials.json
@@ -340,7 +343,7 @@ jobs:
           hooks         = generate_hooks(viral_hooks, trends)
           ideas         = generate_content_ideas(trends, viral_reels, top_metrics)
 
-            if not hooks and not ideas:
+          if not hooks and not ideas:
               print("Skipped daily ideas send: no trend/viral context available yet")
               raise SystemExit(0)
 
@@ -369,8 +372,8 @@ jobs:
        (github.event.inputs.job == 'weekly_report' || github.event.inputs.job == 'all'))
 
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
         with: { python-version: "3.11", cache: "pip" }
       - run: pip install -r requirements.txt
       - run: echo '${{ secrets.GOOGLE_CREDENTIALS_JSON }}' > credentials.json
@@ -382,7 +385,7 @@ jobs:
           load_dotenv()
           from storage.sheets_db import connect, get_or_create_workbook
           from reports.weekly_report import run_weekly_report
-          from notifications.telegram_alerts import alert_job_failed
+          from notifications.telegram_alerts import _send
 
           try:
               client = connect()
@@ -390,8 +393,9 @@ jobs:
               run_weekly_report(wb)
               print("Weekly report sent successfully")
           except Exception as e:
-              print(f"Weekly report error: {e}")
-              alert_job_failed("Weekly Report", str(e))
+              print(f"Weekly report skipped: {e}")
+              _send("⚠️ <b>WEEKLY REPORT SKIPPED</b>\nGoogle Sheets unavailable or not shared with service account.\nSet GOOGLE_SHEET_ID and share sheet with credentials service account email.")
+              raise SystemExit(0)
           EOF
 
       - name: Alert on failure

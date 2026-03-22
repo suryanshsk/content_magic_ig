@@ -137,6 +137,8 @@ def send_daily_ideas(hooks: list, ideas: list,
         score = h.get("score", 0)
         stars = "★" * int(score) + "☆" * (10 - int(score))
         hooks_text += f"\n{i}. <b>{_truncate(h.get('hook',''), 80)}</b>\n   {stars[:5]} · {h.get('pattern','')}\n"
+    if not hooks_text:
+        hooks_text = "\n• No strong hooks available yet (waiting for fresh viral data).\n"
 
     ideas_text = ""
     for idea in ideas[:5]:
@@ -147,6 +149,8 @@ def send_daily_ideas(hooks: list, ideas: list,
             f"   Hook: <i>{_truncate(idea.get('hook',''), 60)}</i>\n"
             f"   📅 {idea.get('best_day','')} {idea.get('best_time','')}\n"
         )
+    if not ideas_text:
+        ideas_text = "\n• No content ideas generated yet (next scrape/trends cycle will fill this).\n"
 
     msg = (
         f"💡 <b>DAILY CONTENT MAGIC — {datetime.now().strftime('%d %b')}</b>\n"
@@ -213,9 +217,25 @@ def send_hourly_creator_digest(creator_stats: list,
       avg_comments, engagement_rate, best_views, api_used
     """
     if not creator_stats:
+        total_configured = int(total_creators or 0)
+        reason_text = ""
+        reasons = [str(x).strip() for x in (failure_reasons or []) if str(x).strip()]
+        if reasons:
+            top = Counter(reasons).most_common(5)
+            parts = [f"{_truncate(r, 36)} ({n})" for r, n in top]
+            reason_text = "\nTopFailReasons: " + " | ".join(parts)
+        summary = ""
+        if total_configured:
+            success_count = max(0, total_configured - int(partial_count) - int(failed_count))
+            summary = (
+                f"\nSummary: {total_configured} total | {success_count} success | "
+                f"{int(partial_count)} partial | {int(failed_count)} failed"
+                f"{reason_text}"
+            )
         return _send(
             f"<b>HOURLY CREATOR DIGEST</b>\n"
-            f"No creator data available this cycle.\n"
+            f"No creator data available this cycle."
+            f"{summary}\n"
             f"Time: {_now_ist()}"
         )
 
