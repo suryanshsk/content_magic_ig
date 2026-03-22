@@ -135,12 +135,14 @@ def build_action_plan(stats: dict) -> list:
     top_topic   = stats.get("top_topic", "")
     top_creator = stats.get("top_creator", "")
     viral_count = stats.get("total_viral_spikes", 0)
+    safe_topic = top_topic or "your fastest-growing niche topic"
+    safe_creator = top_creator or "a top-performing creator"
 
     prompt = (
         f"@suryanshsk is an Indian tech creator (Coder + DevOps + AI/ML + Startups, 12.6K followers).\n"
         f"This week: {viral_count} viral spikes detected among 73 tracked creators.\n"
-        f"Hottest topic: {top_topic}\n"
-        f"Most viral creator: {top_creator}\n\n"
+        f"Hottest topic: {safe_topic}\n"
+        f"Most viral creator: {safe_creator}\n\n"
         f"Write exactly 3 short, specific, actionable bullet points for next week.\n"
         f"Each under 15 words. Direct, no fluff. Focus on content creation actions.\n"
         f"Return as plain text, one action per line, no numbering or bullets."
@@ -160,8 +162,8 @@ def build_action_plan(stats: dict) -> list:
     except Exception as e:
         _log(f"Action plan error: {e}")
         return [
-            f"Post one reel about '{top_topic}' before Friday",
-            f"Study hook style from @{top_creator}'s viral reels",
+            f"Post one reel about '{safe_topic}' before Friday",
+            f"Study hook style from {safe_creator}'s viral reels",
             "Post Monday + Friday at 7–9 PM IST for peak reach",
         ]
 
