@@ -11,7 +11,7 @@ on:
       job:
         description: "Which job to run manually"
         required: true
-        default: "scrape"
+        default: "all"
         type: choice
         options:
           - scrape
@@ -63,10 +63,10 @@ jobs:
           import sys, traceback
           from dotenv import load_dotenv
           load_dotenv()
-            from config import (
+          from config import (
               CREATORS, SCRAPE_REELS_COUNT, validate_env,
               SCRAPE_INTERVAL_HOURS, ENABLE_HOURLY_DIGEST, TELEGRAM_DIGEST_CHUNK_SIZE,
-            )
+          )
           from scrapers.instagram_client import scrape_all_creators
           from processors.metrics import calculate_creator_metrics
           from processors.anomaly_detector import run_all_checks
@@ -95,7 +95,7 @@ jobs:
 
           results = scrape_all_creators(CREATORS, count=SCRAPE_REELS_COUNT)
           profiles_to_save = []
-            creator_digest_rows = []
+          creator_digest_rows = []
 
           for creator_data in results:
               profile  = creator_data["profile"]
@@ -154,16 +154,16 @@ jobs:
               try: save_profiles(wb, profiles_to_save)
               except Exception as e: print(f"Profile save error: {e}")
 
-            if ENABLE_HOURLY_DIGEST:
+          if ENABLE_HOURLY_DIGEST:
               creator_digest_rows = sorted(
-                creator_digest_rows,
-                key=lambda x: int(x.get("avg_views", 0)),
-                reverse=True,
+                  creator_digest_rows,
+                  key=lambda x: int(x.get("avg_views", 0)),
+                  reverse=True,
               )
               sent = send_hourly_creator_digest(
-                creator_digest_rows,
-                chunk_size=TELEGRAM_DIGEST_CHUNK_SIZE,
-                interval_hours=SCRAPE_INTERVAL_HOURS,
+                  creator_digest_rows,
+                  chunk_size=TELEGRAM_DIGEST_CHUNK_SIZE,
+                  interval_hours=SCRAPE_INTERVAL_HOURS,
               )
               print(f"Hourly digest sent: {sent}")
 
