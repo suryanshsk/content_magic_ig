@@ -36,9 +36,15 @@ SHEET_NAME             = GOOGLE_SHEET_NAME
 SCRAPE_REELS_COUNT       = 12     # fetch last 12 reels per creator
 VIRAL_MULTIPLIER         = 2.0    # 2x avg views = viral spike
 TREND_ALERT_SCORE        = 80     # alert if Google Trends score >= this
-SCRAPE_INTERVAL_HOURS    = 6      # scrape every 6 hours to save quota
+SCRAPE_INTERVAL_HOURS    = int(os.getenv("SCRAPE_INTERVAL_HOURS", "1"))  # run hourly by default
 SLEEP_BETWEEN_CREATORS   = 2      # seconds between creator scrapes
 QUOTA_FILE               = "quota_tracker.json"
+
+# Telegram reporting controls
+ENABLE_HOURLY_DIGEST     = os.getenv("ENABLE_HOURLY_DIGEST", "1").strip().lower() not in (
+    "0", "false", "no"
+)
+TELEGRAM_DIGEST_CHUNK_SIZE = int(os.getenv("TELEGRAM_DIGEST_CHUNK_SIZE", "10"))
 
 # ── NICHE KEYWORDS ──────────────────────────────────────────────────────────
 NICHE_KEYWORDS = [

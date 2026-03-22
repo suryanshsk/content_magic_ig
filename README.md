@@ -15,7 +15,7 @@
 | Saves everything to Google Sheets | Google Sheets API | Free |
 | Daily AI hooks + content ideas at 6 AM | Claude API | ~₹400/mo |
 | Weekly Monday digest report | Claude API + Sheets | Included |
-| Runs automatically every 6 hours forever | GitHub Actions | Free |
+| Runs automatically every hour forever | GitHub Actions | Free |
 
 **Total: ₹0–₹400/month**
 
@@ -208,10 +208,11 @@ git push -u origin main
 
 ## What happens automatically after setup
 
-### Every 6 hours:
+### Every hour:
 - Scrapes all 73 Instagram creators (profile + last 12 reels)
 - Detects viral spikes, follower spikes, engagement drops, posting gaps
 - **Instant Telegram alert** for every viral spike found
+- **Hourly Telegram digest** with per-creator metrics (followers, reels, avg views/likes/comments)
 - Saves everything to Google Sheets
 
 ### Every 3 hours:

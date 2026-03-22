@@ -21,7 +21,10 @@ from datetime import datetime, timedelta
 from dotenv import load_dotenv
 load_dotenv()
 
-from config import CREATORS, SCRAPE_REELS_COUNT, validate_env
+from config import (
+    CREATORS, SCRAPE_REELS_COUNT, validate_env,
+    SCRAPE_INTERVAL_HOURS, ENABLE_HOURLY_DIGEST, TELEGRAM_DIGEST_CHUNK_SIZE,
+)
 from scrapers.instagram_client import scrape_all_creators
 from processors.metrics import calculate_creator_metrics
 from processors.anomaly_detector import run_all_checks
@@ -37,6 +40,7 @@ from storage.quota_tracker import get_status_string
 from notifications.telegram_alerts import (
     test_connection, alert_viral_spike, alert_trending_topic,
     alert_anomaly, send_daily_ideas, alert_job_failed, alert_quota_warning,
+    send_hourly_creator_digest,
 )
 from intelligence.trends_tracker import get_all_trends
 from intelligence.idea_generator import generate_hooks, generate_content_ideas
@@ -70,6 +74,7 @@ def run_scrape_job() -> None:
         profiles_to_save = []
         total_virals     = 0
         total_anomalies  = 0
+        creator_digest_rows = []
 
         for creator_data in results:
             profile  = creator_data["profile"]
@@ -80,6 +85,18 @@ def run_scrape_job() -> None:
 
             # Compute metrics
             metrics = calculate_creator_metrics(profile, reels)
+            creator_digest_rows.append({
+                "name": name,
+                "username": username,
+                "followers": metrics.get("followers", 0),
+                "reels_count": len(reels),
+                "avg_views": metrics.get("avg_views", 0),
+                "avg_likes": metrics.get("avg_likes", 0),
+                "avg_comments": metrics.get("avg_comments", 0),
+                "engagement_rate": metrics.get("engagement_rate", 0),
+                "best_views": (metrics.get("best_reel") or {}).get("videoViewCount", 0),
+                "api_used": api_used,
+            })
 
             # Get historical data for anomaly comparison
             history = []
@@ -150,6 +167,21 @@ def run_scrape_job() -> None:
                 save_profiles(_wb, profiles_to_save)
             except Exception as e:
                 log(f"Profile batch save error: {e}")
+
+        # Hourly digest for all creators (chunked Telegram messages)
+        if ENABLE_HOURLY_DIGEST:
+            try:
+                creator_digest_rows.sort(
+                    key=lambda x: int(x.get("avg_views", 0)), reverse=True
+                )
+                sent = send_hourly_creator_digest(
+                    creator_digest_rows,
+                    chunk_size=TELEGRAM_DIGEST_CHUNK_SIZE,
+                    interval_hours=SCRAPE_INTERVAL_HOURS,
+                )
+                log(f"Hourly digest sent: {sent}")
+            except Exception as e:
+                log(f"Hourly digest error: {e}")
 
         log(f"JOB 1 DONE — {len(results)} creators | {total_virals} viral | {total_anomalies} anomalies")
         log(get_status_string())
@@ -324,13 +356,13 @@ def main() -> None:
         sys.exit(1)
 
     # Schedule all jobs
-    schedule.every(6).hours.do(run_scrape_job)
+    schedule.every(SCRAPE_INTERVAL_HOURS).hours.do(run_scrape_job)
     schedule.every(3).hours.do(run_trends_job)
     schedule.every().day.at("06:00").do(run_ideas_job)
     schedule.every().monday.at("08:00").do(run_weekly_report_job)
 
     log("\n✅ All jobs scheduled:")
-    log("   Instagram scrape:  every 6 hours")
+    log(f"   Instagram scrape:  every {SCRAPE_INTERVAL_HOURS} hour(s)")
     log("   Google Trends:     every 3 hours")
     log("   AI ideas:          daily at 6:00 AM")
     log("   Weekly report:     every Monday 8:00 AM")

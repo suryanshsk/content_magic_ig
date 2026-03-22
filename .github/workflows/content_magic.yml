@@ -2,7 +2,7 @@ name: "Content Magic — @suryanshsk"
 
 on:
   schedule:
-    - cron: "0 */6 * * *"      # Instagram scrape — every 6 hours
+    - cron: "0 * * * *"        # Instagram scrape — every hour
     - cron: "0 */3 * * *"      # Google Trends   — every 3 hours
     - cron: "30 0 * * *"       # Daily ideas      — 6:00 AM IST (00:30 UTC)
     - cron: "30 2 * * 1"       # Weekly report    — Monday 8:00 AM IST (02:30 UTC)
@@ -30,14 +30,14 @@ env:
   GOOGLE_SHEETS_CREDS: credentials.json
 
 # ═══════════════════════════════════════════════════════════════════════════
-# JOB 1 — Instagram Scrape (every 6 hours)
+# JOB 1 — Instagram Scrape (every hour)
 # ═══════════════════════════════════════════════════════════════════════════
 jobs:
   instagram-scrape:
     name: "Instagram Scrape + Anomaly Alerts"
     runs-on: ubuntu-latest
     if: |
-      github.event.schedule == '0 */6 * * *' ||
+      github.event.schedule == '0 * * * *' ||
       (github.event_name == 'workflow_dispatch' &&
        (github.event.inputs.job == 'scrape' || github.event.inputs.job == 'all'))
 
@@ -63,7 +63,10 @@ jobs:
           import sys, traceback
           from dotenv import load_dotenv
           load_dotenv()
-          from config import CREATORS, SCRAPE_REELS_COUNT, validate_env
+            from config import (
+              CREATORS, SCRAPE_REELS_COUNT, validate_env,
+              SCRAPE_INTERVAL_HOURS, ENABLE_HOURLY_DIGEST, TELEGRAM_DIGEST_CHUNK_SIZE,
+            )
           from scrapers.instagram_client import scrape_all_creators
           from processors.metrics import calculate_creator_metrics
           from processors.anomaly_detector import run_all_checks
@@ -76,6 +79,7 @@ jobs:
           from storage.quota_tracker import get_status_string
           from notifications.telegram_alerts import (
               alert_viral_spike, alert_anomaly, alert_job_failed,
+              send_hourly_creator_digest,
           )
 
           print(get_status_string())
@@ -91,6 +95,7 @@ jobs:
 
           results = scrape_all_creators(CREATORS, count=SCRAPE_REELS_COUNT)
           profiles_to_save = []
+            creator_digest_rows = []
 
           for creator_data in results:
               profile  = creator_data["profile"]
@@ -99,6 +104,18 @@ jobs:
               name     = creator_data.get("creator_name", username)
               api_used = creator_data.get("api_used", "unknown")
               metrics  = calculate_creator_metrics(profile, reels)
+              creator_digest_rows.append({
+                "name": name,
+                "username": username,
+                "followers": metrics.get("followers", 0),
+                "reels_count": len(reels),
+                "avg_views": metrics.get("avg_views", 0),
+                "avg_likes": metrics.get("avg_likes", 0),
+                "avg_comments": metrics.get("avg_comments", 0),
+                "engagement_rate": metrics.get("engagement_rate", 0),
+                "best_views": (metrics.get("best_reel") or {}).get("videoViewCount", 0),
+                "api_used": api_used,
+              })
               history  = get_creator_history(wb, username, days=30) if wb else []
               anomalies = run_all_checks(creator_data, history, metrics)
               viral_shortcodes = {a.get("shortcode","") for a in anomalies if a.get("type")=="VIRAL_SPIKE"}
@@ -136,6 +153,19 @@ jobs:
           if wb and profiles_to_save:
               try: save_profiles(wb, profiles_to_save)
               except Exception as e: print(f"Profile save error: {e}")
+
+            if ENABLE_HOURLY_DIGEST:
+              creator_digest_rows = sorted(
+                creator_digest_rows,
+                key=lambda x: int(x.get("avg_views", 0)),
+                reverse=True,
+              )
+              sent = send_hourly_creator_digest(
+                creator_digest_rows,
+                chunk_size=TELEGRAM_DIGEST_CHUNK_SIZE,
+                interval_hours=SCRAPE_INTERVAL_HOURS,
+              )
+              print(f"Hourly digest sent: {sent}")
 
           print(f"Done: {len(results)} creators scraped")
           print(get_status_string())

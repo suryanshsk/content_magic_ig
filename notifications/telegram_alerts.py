@@ -198,6 +198,54 @@ def send_weekly_report(report: dict) -> bool:
     return _send(msg)
 
 
+def send_hourly_creator_digest(creator_stats: list,
+                               chunk_size: int = 10,
+                               interval_hours: int = 1) -> bool:
+    """
+    Send hourly digest for all creators in chunked Telegram messages.
+    creator_stats item fields expected:
+      name, username, followers, reels_count, avg_views, avg_likes,
+      avg_comments, engagement_rate, best_views, api_used
+    """
+    if not creator_stats:
+        return _send(
+            f"⏱ <b>HOURLY CREATOR DIGEST</b>\n"
+            f"No creator data available this cycle.\n"
+            f"⏰ {_now_ist()}"
+        )
+
+    total = len(creator_stats)
+    chunk_size = max(1, int(chunk_size or 10))
+    chunks = [creator_stats[i:i + chunk_size] for i in range(0, total, chunk_size)]
+
+    ok_all = True
+    for idx, chunk in enumerate(chunks, 1):
+        lines = []
+        for i, c in enumerate(chunk, 1):
+            lines.append(
+                f"{i}. <b>{c.get('name','')}</b> (@{c.get('username','')})\n"
+                f"   👥 {int(c.get('followers', 0)):,} | 🎬 {int(c.get('reels_count', 0))} reels | "
+                f"👁 {int(c.get('avg_views', 0)):,} avg views\n"
+                f"   ❤️ {int(c.get('avg_likes', 0)):,} | 💬 {int(c.get('avg_comments', 0)):,} | "
+                f"📊 ER {float(c.get('engagement_rate', 0)):.2f}% | 🔝 {int(c.get('best_views', 0)):,}\n"
+                f"   🔌 API: {c.get('api_used','unknown')}"
+            )
+
+        msg = (
+            f"⏱ <b>HOURLY CREATOR DIGEST</b>\n"
+            f"Window: every {interval_hours} hour(s)\n"
+            f"Creators: {total} | Part {idx}/{len(chunks)}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"{"\n\n".join(lines)}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"⏰ {_now_ist()}"
+        )
+        sent = _send(msg)
+        ok_all = ok_all and sent
+
+    return ok_all
+
+
 def alert_quota_warning(service: str, used: int, limit: int) -> bool:
     pct = round(used / limit * 100)
     msg = (
