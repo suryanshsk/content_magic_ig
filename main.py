@@ -37,6 +37,7 @@ from storage.sheets_db import (
     save_viral_reel, save_anomaly, save_trending_topics,
     save_content_ideas, get_creator_history, get_all_viral_reels,
     get_recent_trends,
+    save_scrape_coverage,
 )
 from storage.quota_tracker import get_status_string
 from notifications.telegram_alerts import (
@@ -108,7 +109,11 @@ def run_scrape_job() -> None:
     log("=" * 55)
 
     try:
-        results = scrape_all_creators(CREATORS, count=SCRAPE_REELS_COUNT)
+        results, failures = scrape_all_creators(
+            CREATORS,
+            count=SCRAPE_REELS_COUNT,
+            include_failures=True,
+        )
         _last_scrape_results = results
 
         profiles_to_save = []
@@ -232,6 +237,27 @@ def run_scrape_job() -> None:
             except Exception as e:
                 log(f"Profile batch save error: {e}")
 
+        # Coverage rows include all configured creators (success + failures).
+        if _wb:
+            try:
+                coverage_rows = []
+                for creator_data in results:
+                    profile = creator_data.get("profile", {})
+                    coverage_rows.append({
+                        "creator_name": creator_data.get("creator_name", profile.get("username", "")),
+                        "username": profile.get("username", ""),
+                        "status": creator_data.get("fetch_status", "SUCCESS"),
+                        "api_used": creator_data.get("api_used", "unknown"),
+                        "profile_source": creator_data.get("profile_source", creator_data.get("api_used", "unknown")),
+                        "reels_source": creator_data.get("reels_source", creator_data.get("api_used", "unknown")),
+                        "reels_fetched": len(creator_data.get("reels", [])),
+                        "error": creator_data.get("reels_error", ""),
+                    })
+                coverage_rows.extend(failures)
+                save_scrape_coverage(_wb, coverage_rows)
+            except Exception as e:
+                log(f"Scrape coverage save error: {e}")
+
         # Hourly digest for all creators (chunked Telegram messages)
         if ENABLE_HOURLY_DIGEST:
             try:
@@ -242,6 +268,10 @@ def run_scrape_job() -> None:
                     creator_digest_rows,
                     chunk_size=TELEGRAM_DIGEST_CHUNK_SIZE,
                     interval_hours=SCRAPE_INTERVAL_HOURS,
+                    total_creators=len(CREATORS),
+                    failed_count=len(failures),
+                    partial_count=sum(1 for x in results if x.get("fetch_status") == "PARTIAL"),
+                    failure_reasons=[x.get("error", "") for x in failures],
                 )
                 log(f"Hourly digest sent: {sent}")
             except Exception as e:
@@ -258,7 +288,10 @@ def run_scrape_job() -> None:
             except Exception as e:
                 log(f"Hourly AI insight error: {e}")
 
-        log(f"JOB 1 DONE — {len(results)} creators | {total_virals} viral | {total_anomalies} anomalies")
+        log(
+            f"JOB 1 DONE — {len(results)} success, {len(failures)} failed, "
+            f"{total_virals} viral | {total_anomalies} anomalies"
+        )
         log(get_status_string())
 
     except Exception as e:
@@ -309,11 +342,21 @@ def run_trends_job() -> None:
 # JOB 3 — Daily 6 AM IST: AI hooks + ideas → Telegram
 # ═══════════════════════════════════════════════════════════════════════════
 def run_ideas_job() -> None:
+    global _last_trends, _last_scrape_results
     log("=" * 55)
     log("JOB 3 — Daily AI Ideas Starting")
     log("=" * 55)
 
     try:
+        # Ensure ideas job has fresh context on first run of the day.
+        if not _last_trends:
+            log("Ideas precheck: trends cache empty — running trends job first")
+            run_trends_job()
+
+        if not _last_scrape_results:
+            log("Ideas precheck: scrape cache empty — running scrape job for seed data")
+            run_scrape_job()
+
         # Pull viral reels from Sheets for context
         viral_reels = []
         top_metrics = []
@@ -331,6 +374,10 @@ def run_ideas_job() -> None:
 
         # Analyse viral hooks from this week
         viral_hook_data = analyze_viral_hooks(viral_reels)
+
+        if not viral_hook_data and not _last_trends:
+            log("Ideas skipped: no viral/trend context available yet")
+            return
 
         # Generate hooks and ideas
         hooks = generate_hooks(viral_hook_data, _last_trends)

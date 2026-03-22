@@ -6,6 +6,7 @@ Every message is under 4096 chars. Real HTTP calls to Telegram Bot API.
 
 import requests
 from datetime import datetime
+from collections import Counter
 from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
 
 
@@ -200,7 +201,11 @@ def send_weekly_report(report: dict) -> bool:
 
 def send_hourly_creator_digest(creator_stats: list,
                                chunk_size: int = 10,
-                               interval_hours: int = 1) -> bool:
+                               interval_hours: int = 1,
+                               total_creators: int | None = None,
+                               failed_count: int = 0,
+                               partial_count: int = 0,
+                               failure_reasons: list[str] | None = None) -> bool:
     """
     Send hourly digest for all creators in chunked Telegram messages.
     creator_stats item fields expected:
@@ -215,8 +220,16 @@ def send_hourly_creator_digest(creator_stats: list,
         )
 
     total = len(creator_stats)
+    total_configured = int(total_creators or total)
     chunk_size = max(1, int(chunk_size or 10))
     chunks = [creator_stats[i:i + chunk_size] for i in range(0, total, chunk_size)]
+
+    reason_text = ""
+    reasons = [str(x).strip() for x in (failure_reasons or []) if str(x).strip()]
+    if reasons:
+        top = Counter(reasons).most_common(5)
+        parts = [f"{_truncate(r, 36)} ({n})" for r, n in top]
+        reason_text = "\nTopFailReasons: " + " | ".join(parts)
 
     ok_all = True
     for idx, chunk in enumerate(chunks, 1):
@@ -251,10 +264,19 @@ def send_hourly_creator_digest(creator_stats: list,
             )
 
         body = "\n\n".join(lines)
+        summary_line = ""
+        if idx == 1:
+            success_count = max(0, total_configured - int(partial_count) - int(failed_count))
+            summary_line = (
+                f"\nSummary: {total_configured} total | {success_count} success | "
+                f"{int(partial_count)} partial | {int(failed_count)} failed"
+                f"{reason_text}"
+            )
         msg = (
             f"<b>HOURLY CREATOR DIGEST</b>\n"
             f"WindowHours: {interval_hours}\n"
             f"CreatorsInRun: {total} | Part: {idx}/{len(chunks)}\n"
+            f"{summary_line}\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
             f"{body}\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"

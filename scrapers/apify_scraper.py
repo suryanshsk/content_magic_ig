@@ -104,6 +104,8 @@ def scrape_profile(username: str) -> dict:
         "directUrls": [f"https://www.instagram.com/{username}/"],
         "resultsType": "details",
         "resultsLimit": 1,
+        "searchType": "user",
+        "searchLimit": 1,
     }
     try:
         run_id = _run_actor(input_data)
@@ -145,6 +147,8 @@ def scrape_reels(username: str, count: int = 12) -> list:
         "directUrls":   [f"https://www.instagram.com/{username}/reels/"],
         "resultsType":  "posts",
         "resultsLimit": results_limit,
+        "searchType": "user",
+        "searchLimit": 1,
     }
     try:
         run_id = _run_actor(input_data)

@@ -52,6 +52,10 @@ SHEETS = {
         "WeekStart", "WeekEnd", "CreatorsTracked", "TotalViralSpikes",
         "TotalAnomalies", "TopCreator", "TopTopic", "IdeasGenerated", "Summary",
     ],
+    "Scrape Coverage": [
+        "Timestamp", "CreatorName", "Username", "Status", "APIUsed",
+        "ProfileSource", "ReelsSource", "ReelsFetched", "Error",
+    ],
 }
 
 
@@ -308,6 +312,30 @@ def save_weekly_report(wb: gspread.Spreadsheet, report: dict) -> None:
     ]
     _ws(wb, "Weekly Reports").append_row(row)
     _log("Saved weekly report")
+
+
+def save_scrape_coverage(wb: gspread.Spreadsheet, coverage_rows: list[dict]) -> None:
+    """Batch save scrape coverage rows for all creators in the run."""
+    if not coverage_rows:
+        return
+
+    now = _now()
+    rows = []
+    for item in coverage_rows:
+        rows.append([
+            now,
+            item.get("creator_name", ""),
+            item.get("username", ""),
+            item.get("status", "UNKNOWN"),
+            item.get("api_used", "none"),
+            item.get("profile_source", "none"),
+            item.get("reels_source", "none"),
+            int(item.get("reels_fetched", 0) or 0),
+            str(item.get("error", ""))[:300],
+        ])
+
+    _ws(wb, "Scrape Coverage").append_rows(rows)
+    _log(f"Saved scrape coverage rows: {len(rows)}")
 
 
 def get_creator_last_metrics(wb: gspread.Spreadsheet, username: str) -> dict | None:
