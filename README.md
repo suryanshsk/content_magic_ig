@@ -1,5 +1,5 @@
 # ⚡ Content Magic — @suryanshsk
-### 73 Instagram Creators · Apify + RapidAPI Fallback · Real Alerts · Production Ready
+### 73 Instagram Creators · Apify + RapidAPI + InstaTouch Fallback · Real Alerts · Production Ready
 
 ---
 
@@ -7,7 +7,7 @@
 
 | What | How | Cost |
 |------|-----|------|
-| Scrapes 73 Instagram creator profiles + reels | Apify (primary) → RapidAPI (fallback) | Free tiers |
+| Scrapes 73 Instagram creator profiles + reels | Apify (primary) → RapidAPI (fallback) → InstaTouch (last fallback) | Free tiers |
 | Detects viral spikes (2× avg views) | Python anomaly detector | Free |
 | Instant Telegram alert when spike found | Telegram Bot API | Free |
 | Tracks follower spikes, engagement drops | Anomaly detector | Free |
@@ -35,6 +35,7 @@ content_magic_ig/
 ├── scrapers/
 │   ├── apify_scraper.py             ← PRIMARY: Apify Instagram scraper
 │   ├── rapidapi_scraper.py          ← FALLBACK: RapidAPI scraper
+│   ├── instatouch_scraper.py        ← LAST FALLBACK: InstaTouch CLI scraper
 │   └── instagram_client.py          ← Unified client (auto fallback)
 │
 ├── processors/

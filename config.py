@@ -14,12 +14,25 @@ SCRAPER_MODE = os.getenv("SCRAPER_MODE", "hybrid").strip().lower()
 # ── API KEYS ────────────────────────────────────────────────────────────────
 APIFY_API_TOKEN        = os.getenv("APIFY_API_TOKEN", "")
 APIFY_ACTOR_ID         = "apify/instagram-scraper"
-APIFY_MONTHLY_LIMIT    = 95          # stop at 95 to leave buffer before hard 100 limit
+APIFY_MONTHLY_LIMIT    = int(os.getenv("APIFY_MONTHLY_LIMIT", "95"))
 
 RAPIDAPI_KEY           = os.getenv("RAPIDAPI_KEY", "")
-RAPIDAPI_HOST          = os.getenv("RAPIDAPI_HOST", "instagram-scraper-api2.p.rapidapi.com")
-RAPIDAPI_BASE_URL      = os.getenv("RAPIDAPI_BASE_URL", "https://instagram-scraper-api2.p.rapidapi.com/v1")
-RAPIDAPI_MONTHLY_LIMIT = 480         # stop at 480 before hard 500 limit
+RAPIDAPI_HOST          = os.getenv("RAPIDAPI_HOST", "instagram-scraper-stable-api.p.rapidapi.com")
+RAPIDAPI_BASE_URL      = os.getenv("RAPIDAPI_BASE_URL", "https://instagram-scraper-stable-api.p.rapidapi.com")
+RAPIDAPI_MONTHLY_LIMIT = int(os.getenv("RAPIDAPI_MONTHLY_LIMIT", "480"))
+
+# Optional tertiary fallback: InstaTouch CLI (Node.js)
+ENABLE_INSTATOUCH_FALLBACK = os.getenv("ENABLE_INSTATOUCH_FALLBACK", "1").strip().lower() not in (
+    "0", "false", "no"
+)
+INSTATOUCH_SESSION      = os.getenv("INSTATOUCH_SESSION", "").strip()
+AUTO_FETCH_INSTAGRAM_SESSION = os.getenv("AUTO_FETCH_INSTAGRAM_SESSION", "0").strip().lower() not in (
+    "0", "false", "no"
+)
+INSTATOUCH_NPX_COMMAND  = os.getenv("INSTATOUCH_NPX_COMMAND", "npx").strip() or "npx"
+INSTATOUCH_TIMEOUT_MS   = int(os.getenv("INSTATOUCH_TIMEOUT_MS", "1200"))
+INSTATOUCH_MAX_CREATORS_PER_RUN = int(os.getenv("INSTATOUCH_MAX_CREATORS_PER_RUN", "8"))
+INSTATOUCH_COOLDOWN_SECONDS = int(os.getenv("INSTATOUCH_COOLDOWN_SECONDS", "8"))
 
 TELEGRAM_BOT_TOKEN     = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID       = os.getenv("TELEGRAM_CHAT_ID", "")

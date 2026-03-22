@@ -9,3 +9,4 @@ anthropic==0.28.0
 pytrends==4.9.2
 schedule==1.2.1
 python-dotenv==1.0.0
+browser-cookie3==0.19.1

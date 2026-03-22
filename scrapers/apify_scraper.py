@@ -101,7 +101,7 @@ def scrape_profile(username: str) -> dict:
     _check_quota()
     _log(f"Scraping profile: @{username}")
     input_data = {
-        "usernames": [username],
+        "directUrls": [f"https://www.instagram.com/{username}/"],
         "resultsType": "details",
         "resultsLimit": 1,
     }

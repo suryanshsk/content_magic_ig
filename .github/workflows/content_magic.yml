@@ -24,6 +24,13 @@ on:
 env:
   APIFY_API_TOKEN:    ${{ secrets.APIFY_API_TOKEN }}
   RAPIDAPI_KEY:       ${{ secrets.RAPIDAPI_KEY }}
+  ENABLE_INSTATOUCH_FALLBACK: ${{ vars.ENABLE_INSTATOUCH_FALLBACK || '1' }}
+  INSTATOUCH_SESSION: ${{ secrets.INSTATOUCH_SESSION }}
+  AUTO_FETCH_INSTAGRAM_SESSION: ${{ vars.AUTO_FETCH_INSTAGRAM_SESSION || '0' }}
+  INSTATOUCH_NPX_COMMAND: ${{ vars.INSTATOUCH_NPX_COMMAND || 'npx' }}
+  INSTATOUCH_TIMEOUT_MS: ${{ vars.INSTATOUCH_TIMEOUT_MS || '1200' }}
+  INSTATOUCH_MAX_CREATORS_PER_RUN: ${{ vars.INSTATOUCH_MAX_CREATORS_PER_RUN || '8' }}
+  INSTATOUCH_COOLDOWN_SECONDS: ${{ vars.INSTATOUCH_COOLDOWN_SECONDS || '8' }}
   TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
   TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
   ANTHROPIC_API_KEY:  ${{ secrets.ANTHROPIC_API_KEY }}
@@ -50,6 +57,11 @@ jobs:
         with:
           python-version: "3.11"
           cache: "pip"
+
+      - name: Set up Node.js for InstaTouch fallback
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
 
       - name: Install dependencies
         run: pip install -r requirements.txt
