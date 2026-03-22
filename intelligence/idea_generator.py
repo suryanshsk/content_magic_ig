@@ -182,3 +182,68 @@ Return ONLY this JSON array:
     except Exception as e:
         _log(f"Idea generation error: {e}")
         return []
+
+
+def generate_hourly_ai_insights(creator_digest_rows: list,
+                                top_creators: int = 8) -> list:
+    """
+    Generate concise hourly AI insights from live creator/reel metrics.
+    Returns list of dicts: creator, status, what_worked, what_failed, ideas[].
+    """
+    if not creator_digest_rows:
+        return []
+
+    rows = sorted(
+        creator_digest_rows,
+        key=lambda x: int(x.get("avg_views", 0)),
+        reverse=True,
+    )[:max(1, top_creators)]
+
+    lines = []
+    for r in rows:
+        reels = r.get("reel_details", [])[:5]
+        reel_lines = []
+        for x in reels:
+            reel_lines.append(
+                f"- topic: {x.get('topic','')} | views: {x.get('views',0)} | "
+                f"likes: {x.get('likes',0)} | comments: {x.get('comments',0)} | "
+                f"age_h: {x.get('age_hours',0)} | vph: {x.get('views_per_hour',0)} | "
+                f"status: {x.get('performance_status','Average')}"
+            )
+        lines.append(
+            f"Creator: {r.get('name','')} (@{r.get('username','')})\n"
+            f"followers={r.get('followers',0)}, avg_views={r.get('avg_views',0)}, "
+            f"engagement_rate={r.get('engagement_rate',0)}\n"
+            f"Reels:\n" + "\n".join(reel_lines)
+        )
+
+    prompt = f"""Analyse hourly Instagram performance and suggest quick actions.
+
+Data:
+{chr(10).join(lines)}
+
+Return ONLY JSON array:
+[
+  {{
+    "creator": "name",
+    "status": "Viral|Above Average|Average|Underperforming",
+    "what_worked": "one short sentence",
+    "what_failed": "one short sentence",
+    "ideas": ["idea 1", "idea 2"]
+  }}
+]
+"""
+
+    try:
+        client = _client()
+        message = client.messages.create(
+            model=CLAUDE_MODEL,
+            max_tokens=1600,
+            system=SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        data = _safe_parse(message.content[0].text)
+        return data if isinstance(data, list) else []
+    except Exception as e:
+        _log(f"Hourly AI insight error: {e}")
+        return []

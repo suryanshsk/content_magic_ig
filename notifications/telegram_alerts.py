@@ -209,9 +209,9 @@ def send_hourly_creator_digest(creator_stats: list,
     """
     if not creator_stats:
         return _send(
-            f"⏱ <b>HOURLY CREATOR DIGEST</b>\n"
+            f"<b>HOURLY CREATOR DIGEST</b>\n"
             f"No creator data available this cycle.\n"
-            f"⏰ {_now_ist()}"
+            f"Time: {_now_ist()}"
         )
 
     total = len(creator_stats)
@@ -226,39 +226,73 @@ def send_hourly_creator_digest(creator_stats: list,
             for j, r in enumerate(c.get("reel_details", []), 1):
                 posted_at = str(r.get("posted_at", ""))[:19].replace("T", " ")
                 shares = r.get("shares", "N/A")
+                status = r.get("performance_status", "Average")
                 reel_lines.append(
-                    f"      {j}) 🎞 <i>{_truncate(str(r.get('topic','No topic')), 70)}</i>\n"
-                    f"         🕒 {posted_at or 'N/A'} | 👁 {int(r.get('views',0)):,} | "
-                    f"❤️ {int(r.get('likes',0)):,} | 💬 {int(r.get('comments',0)):,} | "
-                    f"🔁 {shares}\n"
-                    f"         🔗 {r.get('url','')}"
+                    f"      {j}) Topic: <i>{_truncate(str(r.get('topic','No topic')), 80)}</i>\n"
+                    f"         PostedAt: {posted_at or 'N/A'} | AgeHours: {r.get('age_hours', 0)}\n"
+                    f"         Views: {int(r.get('views',0)):,} | Likes: {int(r.get('likes',0)):,} | "
+                    f"Comments: {int(r.get('comments',0)):,} | Shares: {shares}\n"
+                    f"         ViewsPerHour: {int(r.get('views_per_hour',0)):,} | "
+                    f"LikesPerHour: {int(r.get('likes_per_hour',0)):,} | "
+                    f"CommentsPerHour: {int(r.get('comments_per_hour',0)):,}\n"
+                    f"         Status: <b>{status}</b>\n"
+                    f"         Link: {r.get('url','')}"
                 )
             reels_block = "\n" + "\n".join(reel_lines) if reel_lines else "\n      No recent reels found"
 
             lines.append(
                 f"{i}. <b>{c.get('name','')}</b> (@{c.get('username','')})\n"
-                f"   👥 {int(c.get('followers', 0)):,} | 🎬 {int(c.get('reels_count', 0))} reels | "
-                f"👁 {int(c.get('avg_views', 0)):,} avg views\n"
-                f"   ❤️ {int(c.get('avg_likes', 0)):,} | 💬 {int(c.get('avg_comments', 0)):,} | "
-                f"📊 ER {float(c.get('engagement_rate', 0)):.2f}% | 🔝 {int(c.get('best_views', 0)):,}\n"
-                f"   🔌 API: {c.get('api_used','unknown')}\n"
-                f"   📌 Recent reels:{reels_block}"
+                f"   Followers: {int(c.get('followers', 0)):,} | ReelsFetched: {int(c.get('reels_count', 0))}\n"
+                f"   AvgViews: {int(c.get('avg_views', 0)):,} | AvgLikes: {int(c.get('avg_likes', 0)):,} | "
+                f"AvgComments: {int(c.get('avg_comments', 0)):,}\n"
+                f"   EngagementRate: {float(c.get('engagement_rate', 0)):.2f}% | BestViews: {int(c.get('best_views', 0)):,}\n"
+                f"   DataSource: {c.get('api_used','unknown')}\n"
+                f"   RecentReels:{reels_block}"
             )
 
         body = "\n\n".join(lines)
         msg = (
-            f"⏱ <b>HOURLY CREATOR DIGEST</b>\n"
-            f"Window: every {interval_hours} hour(s)\n"
-            f"Creators: {total} | Part {idx}/{len(chunks)}\n"
+            f"<b>HOURLY CREATOR DIGEST</b>\n"
+            f"WindowHours: {interval_hours}\n"
+            f"CreatorsInRun: {total} | Part: {idx}/{len(chunks)}\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
             f"{body}\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"⏰ {_now_ist()}"
+            f"Time: {_now_ist()}"
         )
         sent = _send(msg)
         ok_all = ok_all and sent
 
     return ok_all
+
+
+def send_hourly_ai_insights(insights: list) -> bool:
+    if not insights:
+        return True
+
+    lines = []
+    for i, x in enumerate(insights, 1):
+        ideas = x.get("ideas", [])[:2]
+        idea_text = " | ".join(ideas) if ideas else "No idea generated"
+        lines.append(
+            f"{i}. Creator: <b>{x.get('creator','')}</b>\n"
+            f"   Status: {x.get('status','Average')}\n"
+            f"   WhatWorked: {x.get('what_worked','N/A')}\n"
+            f"   WhatFailed: {x.get('what_failed','N/A')}\n"
+            f"   ContentIdeas: {idea_text}"
+        )
+
+    body = "\n\n".join(lines)
+
+    msg = (
+        f"<b>HOURLY AI PERFORMANCE INSIGHTS</b>\n"
+        f"GeneratedFrom: Live creator metrics\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"{body}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"Time: {_now_ist()}"
+    )
+    return _send(msg)
 
 
 def alert_quota_warning(service: str, used: int, limit: int) -> bool:

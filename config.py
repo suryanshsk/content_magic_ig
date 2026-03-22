@@ -45,7 +45,13 @@ ENABLE_HOURLY_DIGEST     = os.getenv("ENABLE_HOURLY_DIGEST", "1").strip().lower(
     "0", "false", "no"
 )
 TELEGRAM_DIGEST_CHUNK_SIZE = int(os.getenv("TELEGRAM_DIGEST_CHUNK_SIZE", "10"))
-TELEGRAM_DIGEST_REELS_PER_CREATOR = int(os.getenv("TELEGRAM_DIGEST_REELS_PER_CREATOR", "2"))
+TELEGRAM_DIGEST_REELS_PER_CREATOR = int(os.getenv("TELEGRAM_DIGEST_REELS_PER_CREATOR", "5"))
+
+# Optional Anthropic-powered hourly analysis
+ENABLE_HOURLY_AI_INSIGHTS = os.getenv("ENABLE_HOURLY_AI_INSIGHTS", "1").strip().lower() not in (
+    "0", "false", "no"
+)
+HOURLY_AI_TOP_CREATORS = int(os.getenv("HOURLY_AI_TOP_CREATORS", "8"))
 
 # ── NICHE KEYWORDS ──────────────────────────────────────────────────────────
 NICHE_KEYWORDS = [

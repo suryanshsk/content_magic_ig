@@ -25,6 +25,7 @@ from config import (
     CREATORS, SCRAPE_REELS_COUNT, validate_env,
     SCRAPE_INTERVAL_HOURS, ENABLE_HOURLY_DIGEST, TELEGRAM_DIGEST_CHUNK_SIZE,
     TELEGRAM_DIGEST_REELS_PER_CREATOR,
+    ENABLE_HOURLY_AI_INSIGHTS, HOURLY_AI_TOP_CREATORS,
 )
 from scrapers.instagram_client import scrape_all_creators
 from processors.metrics import calculate_creator_metrics
@@ -41,10 +42,12 @@ from storage.quota_tracker import get_status_string
 from notifications.telegram_alerts import (
     test_connection, alert_viral_spike, alert_trending_topic,
     alert_anomaly, send_daily_ideas, alert_job_failed, alert_quota_warning,
-    send_hourly_creator_digest,
+    send_hourly_creator_digest, send_hourly_ai_insights,
 )
 from intelligence.trends_tracker import get_all_trends
-from intelligence.idea_generator import generate_hooks, generate_content_ideas
+from intelligence.idea_generator import (
+    generate_hooks, generate_content_ideas, generate_hourly_ai_insights,
+)
 from reports.weekly_report import run_weekly_report
 
 
@@ -67,6 +70,31 @@ def _reel_topic(caption: str) -> str:
         if 0 < idx <= 100:
             return text[:idx].strip()
     return text[:100].strip()
+
+
+def _hours_since(timestamp: str) -> float:
+    try:
+        dt = datetime.fromisoformat(str(timestamp).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            age = datetime.utcnow() - dt
+        else:
+            age = datetime.now(dt.tzinfo) - dt
+        return max(1.0, age.total_seconds() / 3600)
+    except Exception:
+        return 1.0
+
+
+def _performance_status(views: int, avg_views: float) -> str:
+    if avg_views <= 0:
+        return "Average"
+    ratio = views / avg_views
+    if ratio >= 2.0:
+        return "Viral"
+    if ratio >= 1.2:
+        return "Above Average"
+    if ratio >= 0.8:
+        return "Average"
+    return "Underperforming"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -100,14 +128,24 @@ def run_scrape_job() -> None:
             reels_sorted = sorted(reels, key=lambda r: str(r.get("timestamp", "")), reverse=True)
             reel_details = []
             for reel in reels_sorted[:max(1, TELEGRAM_DIGEST_REELS_PER_CREATOR)]:
+                views = int(reel.get("videoViewCount", 0) or 0)
+                likes = int(reel.get("likesCount", 0) or 0)
+                comments = int(reel.get("commentsCount", 0) or 0)
+                age_hours = round(_hours_since(reel.get("timestamp", "")), 1)
+                avg_views = max(1, int(metrics.get("avg_views", 0) or 0))
                 reel_details.append({
                     "topic": _reel_topic(reel.get("caption", "")),
                     "posted_at": reel.get("timestamp", ""),
-                    "views": int(reel.get("videoViewCount", 0) or 0),
-                    "likes": int(reel.get("likesCount", 0) or 0),
-                    "comments": int(reel.get("commentsCount", 0) or 0),
+                    "views": views,
+                    "likes": likes,
+                    "comments": comments,
                     # Share count is not exposed consistently by current providers.
                     "shares": reel.get("shareCount", "N/A"),
+                    "age_hours": age_hours,
+                    "views_per_hour": int(views / age_hours),
+                    "likes_per_hour": int(likes / age_hours),
+                    "comments_per_hour": int(comments / age_hours),
+                    "performance_status": _performance_status(views, avg_views),
                     "url": reel.get("reel_url", ""),
                 })
             creator_digest_rows.append({
@@ -208,6 +246,17 @@ def run_scrape_job() -> None:
                 log(f"Hourly digest sent: {sent}")
             except Exception as e:
                 log(f"Hourly digest error: {e}")
+
+        if ENABLE_HOURLY_AI_INSIGHTS:
+            try:
+                ai_insights = generate_hourly_ai_insights(
+                    creator_digest_rows,
+                    top_creators=HOURLY_AI_TOP_CREATORS,
+                )
+                ai_sent = send_hourly_ai_insights(ai_insights)
+                log(f"Hourly AI insights sent: {ai_sent}")
+            except Exception as e:
+                log(f"Hourly AI insight error: {e}")
 
         log(f"JOB 1 DONE — {len(results)} creators | {total_virals} viral | {total_anomalies} anomalies")
         log(get_status_string())
