@@ -24,9 +24,11 @@ def _log(msg: str) -> None:
 
 
 def _headers() -> dict:
+    key = (RAPIDAPI_KEY or "").strip().strip('"').strip("'")
+    host = (RAPIDAPI_HOST or "").strip().strip('"').strip("'")
     return {
-        "x-rapidapi-key":  RAPIDAPI_KEY,
-        "x-rapidapi-host": RAPIDAPI_HOST,
+        "x-rapidapi-key":  key,
+        "x-rapidapi-host": host,
     }
 
 
@@ -42,9 +44,14 @@ def _get(endpoint: str, params: dict = None) -> dict:
     if r.status_code == 429:
         raise RapidAPIQuotaError("RapidAPI rate limit / quota exceeded (429)")
     if r.status_code == 401:
-        raise RapidAPIError("RapidAPI unauthorised — check your API key")
+        raise RapidAPIError("RapidAPI unauthorized (401) — key may be invalid or revoked")
     if r.status_code != 200:
-        raise RapidAPIError(f"HTTP {r.status_code}: {r.text[:200]}")
+        msg = r.text[:200]
+        if "Invalid API key" in msg:
+            raise RapidAPIError("RapidAPI invalid key — rotate key and update RAPIDAPI_KEY")
+        if "not subscribed" in msg.lower():
+            raise RapidAPIError("RapidAPI key is valid but not subscribed to configured API host")
+        raise RapidAPIError(f"HTTP {r.status_code}: {msg}")
     try:
         return r.json()
     except Exception:
