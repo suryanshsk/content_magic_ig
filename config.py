@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Scraper mode: "rapidapi_only" (no Apify calls) or "hybrid" (Apify + RapidAPI fallback)
-SCRAPER_MODE = os.getenv("SCRAPER_MODE", "rapidapi_only").strip().lower()
+SCRAPER_MODE = os.getenv("SCRAPER_MODE", "hybrid").strip().lower()
 
 # ── API KEYS ────────────────────────────────────────────────────────────────
 APIFY_API_TOKEN        = os.getenv("APIFY_API_TOKEN", "")

@@ -138,10 +138,13 @@ def scrape_reels(username: str, count: int = 12) -> list:
     """
     _check_quota()
     _log(f"Scraping {count} reels: @{username}")
+    # The actor returns richer post data when called via direct profile/reels URL.
+    # Request more than `count` because non-video posts can be present in the feed.
+    results_limit = min(max(count * 3, count), 50)
     input_data = {
-        "usernames":    [username],
+        "directUrls":   [f"https://www.instagram.com/{username}/reels/"],
         "resultsType":  "posts",
-        "resultsLimit": count,
+        "resultsLimit": results_limit,
     }
     try:
         run_id = _run_actor(input_data)
@@ -155,6 +158,7 @@ def scrape_reels(username: str, count: int = 12) -> list:
                 continue
             caption   = raw.get("caption", "") or ""
             shortcode = raw.get("shortCode", raw.get("id", ""))
+            canonical_url = raw.get("url", "")
             reel = {
                 "shortcode":      shortcode,
                 "caption":        caption,
@@ -165,11 +169,13 @@ def scrape_reels(username: str, count: int = 12) -> list:
                 "timestamp":      _parse_timestamp(raw.get("timestamp")),
                 "durationSec":    float(raw.get("videoDuration", 0) or 0),
                 "displayUrl":     raw.get("displayUrl", ""),
-                "reel_url":       f"https://www.instagram.com/reel/{shortcode}/",
+                "reel_url":       canonical_url or f"https://www.instagram.com/reel/{shortcode}/",
                 "hashtags":       _extract_hashtags(caption),
                 "mentions":       _extract_mentions(caption),
             }
             reels.append(reel)
+            if len(reels) >= count:
+                break
         _log(f"Got {len(reels)} reels for @{username}")
         return reels
     except ApifyQuotaError:
