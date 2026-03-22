@@ -4,6 +4,8 @@ quota_tracker.json
 __pycache__/
 *.pyc
 *.pyo
+.venv/
+venv/
 .DS_Store
 .idea/
 .vscode/
