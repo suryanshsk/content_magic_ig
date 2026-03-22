@@ -1,0 +1,304 @@
+name: "Content Magic — @suryanshsk"
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"      # Instagram scrape — every 6 hours
+    - cron: "0 */3 * * *"      # Google Trends   — every 3 hours
+    - cron: "30 0 * * *"       # Daily ideas      — 6:00 AM IST (00:30 UTC)
+    - cron: "30 2 * * 1"       # Weekly report    — Monday 8:00 AM IST (02:30 UTC)
+  workflow_dispatch:
+    inputs:
+      job:
+        description: "Which job to run manually"
+        required: true
+        default: "scrape"
+        type: choice
+        options:
+          - scrape
+          - trends
+          - ideas
+          - weekly_report
+          - all
+
+# ── Shared setup step ────────────────────────────────────────────────────────
+env:
+  APIFY_API_TOKEN:    ${{ secrets.APIFY_API_TOKEN }}
+  RAPIDAPI_KEY:       ${{ secrets.RAPIDAPI_KEY }}
+  TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+  TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
+  ANTHROPIC_API_KEY:  ${{ secrets.ANTHROPIC_API_KEY }}
+  GOOGLE_SHEETS_CREDS: credentials.json
+
+# ═══════════════════════════════════════════════════════════════════════════
+# JOB 1 — Instagram Scrape (every 6 hours)
+# ═══════════════════════════════════════════════════════════════════════════
+jobs:
+  instagram-scrape:
+    name: "Instagram Scrape + Anomaly Alerts"
+    runs-on: ubuntu-latest
+    if: |
+      github.event.schedule == '0 */6 * * *' ||
+      (github.event_name == 'workflow_dispatch' &&
+       (github.event.inputs.job == 'scrape' || github.event.inputs.job == 'all'))
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Write Google credentials
+        run: echo '${{ secrets.GOOGLE_CREDENTIALS_JSON }}' > credentials.json
+
+      - name: Run Instagram Scrape
+        run: |
+          python - <<'EOF'
+          import sys, traceback
+          from dotenv import load_dotenv
+          load_dotenv()
+          from config import CREATORS, SCRAPE_REELS_COUNT, validate_env
+          from scrapers.instagram_client import scrape_all_creators
+          from processors.metrics import calculate_creator_metrics
+          from processors.anomaly_detector import run_all_checks
+          from processors.hook_extractor import analyze_viral_hooks
+          from storage.sheets_db import (
+              connect, get_or_create_workbook, setup_all_sheets,
+              save_profiles, save_reels, save_metrics,
+              save_viral_reel, save_anomaly, get_creator_history,
+          )
+          from storage.quota_tracker import get_status_string
+          from notifications.telegram_alerts import (
+              alert_viral_spike, alert_anomaly, alert_job_failed,
+          )
+
+          print(get_status_string())
+          validate_env()
+
+          try:
+              client = connect()
+              wb     = get_or_create_workbook(client)
+              setup_all_sheets(wb)
+          except Exception as e:
+              print(f"Sheets error: {e} — continuing without Sheets")
+              wb = None
+
+          results = scrape_all_creators(CREATORS, count=SCRAPE_REELS_COUNT)
+          profiles_to_save = []
+
+          for creator_data in results:
+              profile  = creator_data["profile"]
+              reels    = creator_data["reels"]
+              username = profile["username"]
+              name     = creator_data.get("creator_name", username)
+              api_used = creator_data.get("api_used", "unknown")
+              metrics  = calculate_creator_metrics(profile, reels)
+              history  = get_creator_history(wb, username, days=30) if wb else []
+              anomalies = run_all_checks(creator_data, history, metrics)
+              viral_shortcodes = {a.get("shortcode","") for a in anomalies if a.get("type")=="VIRAL_SPIKE"}
+
+              if wb:
+                  profiles_to_save.append((profile, api_used))
+                  try:
+                      save_reels(wb, username, name, reels, viral_shortcodes)
+                      save_metrics(wb, username, metrics)
+                  except Exception as e:
+                      print(f"Sheets save error @{username}: {e}")
+
+              for anomaly in anomalies:
+                  atype = anomaly.get("type", "")
+                  if atype == "VIRAL_SPIKE":
+                      print(f"VIRAL: @{username} {anomaly['multiplier']}x | {anomaly['views']:,} views")
+                      sent = alert_viral_spike(
+                          name, username,
+                          anomaly.get("hook",""), anomaly["views"],
+                          anomaly["avg_views"], anomaly["multiplier"],
+                          anomaly.get("reel_url",""), anomaly.get("hashtags",[]),
+                      )
+                      if wb:
+                          try:
+                              save_viral_reel(wb, username, name, anomaly)
+                              save_anomaly(wb, username, anomaly, alert_sent=sent)
+                          except Exception as e:
+                              print(f"Viral save error: {e}")
+                  elif atype in ("FOLLOWER_SPIKE","ENGAGEMENT_DROP","POSTING_SPIKE","POSTING_GAP"):
+                      sent = alert_anomaly(name, username, atype, anomaly.get("detail",""))
+                      if wb:
+                          try: save_anomaly(wb, username, anomaly, alert_sent=sent)
+                          except: pass
+
+          if wb and profiles_to_save:
+              try: save_profiles(wb, profiles_to_save)
+              except Exception as e: print(f"Profile save error: {e}")
+
+          print(f"Done: {len(results)} creators scraped")
+          print(get_status_string())
+          EOF
+
+      - name: Alert on failure
+        if: failure()
+        run: |
+          python - <<'EOF'
+          from notifications.telegram_alerts import alert_job_failed
+          alert_job_failed("Instagram Scrape (GitHub Actions)", "Job failed — check Actions logs")
+          EOF
+
+# ═══════════════════════════════════════════════════════════════════════════
+# JOB 2 — Google Trends (every 3 hours)
+# ═══════════════════════════════════════════════════════════════════════════
+  google-trends:
+    name: "Google Trends Scrape + Alerts"
+    runs-on: ubuntu-latest
+    if: |
+      github.event.schedule == '0 */3 * * *' ||
+      (github.event_name == 'workflow_dispatch' &&
+       (github.event.inputs.job == 'trends' || github.event.inputs.job == 'all'))
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
+        with: { python-version: "3.11", cache: "pip" }
+      - run: pip install -r requirements.txt
+      - run: echo '${{ secrets.GOOGLE_CREDENTIALS_JSON }}' > credentials.json
+
+      - name: Run Trends Scrape
+        run: |
+          python - <<'EOF'
+          from dotenv import load_dotenv
+          load_dotenv()
+          from intelligence.trends_tracker import get_all_trends
+          from notifications.telegram_alerts import alert_trending_topic
+          from storage.sheets_db import connect, get_or_create_workbook, save_trending_topics
+
+          trends = get_all_trends()
+
+          try:
+              client = connect()
+              wb     = get_or_create_workbook(client)
+              save_trending_topics(wb, trends)
+          except Exception as e:
+              print(f"Sheets save error: {e}")
+
+          high_score = [t for t in trends if t.get("score",0) >= 80]
+          for topic in high_score[:3]:
+              print(f"TRENDING: {topic['keyword']} score={topic['score']}")
+              alert_trending_topic(
+                  topic["keyword"], topic["score"], topic.get("type",""),
+                  f"Make a reel about '{topic['keyword']}' — trending now!"
+              )
+          print(f"Done: {len(trends)} topics | {len(high_score)} alerts")
+          EOF
+
+      - name: Alert on failure
+        if: failure()
+        run: |
+          python -c "from notifications.telegram_alerts import alert_job_failed; alert_job_failed('Google Trends', 'Job failed')"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# JOB 3 — Daily AI Ideas (6 AM IST = 00:30 UTC)
+# ═══════════════════════════════════════════════════════════════════════════
+  daily-ideas:
+    name: "Daily AI Hooks + Ideas → Telegram"
+    runs-on: ubuntu-latest
+    if: |
+      github.event.schedule == '30 0 * * *' ||
+      (github.event_name == 'workflow_dispatch' &&
+       (github.event.inputs.job == 'ideas' || github.event.inputs.job == 'all'))
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
+        with: { python-version: "3.11", cache: "pip" }
+      - run: pip install -r requirements.txt
+      - run: echo '${{ secrets.GOOGLE_CREDENTIALS_JSON }}' > credentials.json
+
+      - name: Generate and Send Ideas
+        run: |
+          python - <<'EOF'
+          from dotenv import load_dotenv
+          load_dotenv()
+          from intelligence.trends_tracker import get_all_trends
+          from intelligence.idea_generator import generate_hooks, generate_content_ideas
+          from processors.hook_extractor import analyze_viral_hooks
+          from notifications.telegram_alerts import send_daily_ideas
+          from storage.sheets_db import (
+              connect, get_or_create_workbook, get_all_viral_reels, save_content_ideas
+          )
+
+          wb = None
+          viral_reels = []
+          top_metrics = []
+          try:
+              client = connect()
+              wb     = get_or_create_workbook(client)
+              viral_reels = get_all_viral_reels(wb, days=7)
+              top_metrics = wb.worksheet("Creator Metrics").get_all_records()
+              top_metrics = sorted(top_metrics, key=lambda x: int(x.get("AvgViews",0)), reverse=True)[:5]
+          except Exception as e:
+              print(f"Sheets read error: {e}")
+
+          trends        = get_all_trends()
+          viral_hooks   = analyze_viral_hooks(viral_reels)
+          hooks         = generate_hooks(viral_hooks, trends)
+          ideas         = generate_content_ideas(trends, viral_reels, top_metrics)
+
+          if wb:
+              try: save_content_ideas(wb, hooks, ideas)
+              except Exception as e: print(f"Ideas save error: {e}")
+
+          send_daily_ideas(hooks, ideas)
+          print(f"Done: {len(hooks)} hooks + {len(ideas)} ideas sent")
+          EOF
+
+      - name: Alert on failure
+        if: failure()
+        run: |
+          python -c "from notifications.telegram_alerts import alert_job_failed; alert_job_failed('Daily Ideas', 'Job failed')"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# JOB 4 — Weekly Report (Monday 8 AM IST = 02:30 UTC)
+# ═══════════════════════════════════════════════════════════════════════════
+  weekly-report:
+    name: "Weekly Report → Telegram"
+    runs-on: ubuntu-latest
+    if: |
+      github.event.schedule == '30 2 * * 1' ||
+      (github.event_name == 'workflow_dispatch' &&
+       (github.event.inputs.job == 'weekly_report' || github.event.inputs.job == 'all'))
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
+        with: { python-version: "3.11", cache: "pip" }
+      - run: pip install -r requirements.txt
+      - run: echo '${{ secrets.GOOGLE_CREDENTIALS_JSON }}' > credentials.json
+
+      - name: Send Weekly Report
+        run: |
+          python - <<'EOF'
+          from dotenv import load_dotenv
+          load_dotenv()
+          from storage.sheets_db import connect, get_or_create_workbook
+          from reports.weekly_report import run_weekly_report
+          from notifications.telegram_alerts import alert_job_failed
+
+          try:
+              client = connect()
+              wb     = get_or_create_workbook(client)
+              run_weekly_report(wb)
+              print("Weekly report sent successfully")
+          except Exception as e:
+              print(f"Weekly report error: {e}")
+              alert_job_failed("Weekly Report", str(e))
+          EOF
+
+      - name: Alert on failure
+        if: failure()
+        run: |
+          python -c "from notifications.telegram_alerts import alert_job_failed; alert_job_failed('Weekly Report', 'Job failed')"
