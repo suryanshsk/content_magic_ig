@@ -222,21 +222,36 @@ def send_hourly_creator_digest(creator_stats: list,
     for idx, chunk in enumerate(chunks, 1):
         lines = []
         for i, c in enumerate(chunk, 1):
+            reel_lines = []
+            for j, r in enumerate(c.get("reel_details", []), 1):
+                posted_at = str(r.get("posted_at", ""))[:19].replace("T", " ")
+                shares = r.get("shares", "N/A")
+                reel_lines.append(
+                    f"      {j}) 🎞 <i>{_truncate(str(r.get('topic','No topic')), 70)}</i>\n"
+                    f"         🕒 {posted_at or 'N/A'} | 👁 {int(r.get('views',0)):,} | "
+                    f"❤️ {int(r.get('likes',0)):,} | 💬 {int(r.get('comments',0)):,} | "
+                    f"🔁 {shares}\n"
+                    f"         🔗 {r.get('url','')}"
+                )
+            reels_block = "\n" + "\n".join(reel_lines) if reel_lines else "\n      No recent reels found"
+
             lines.append(
                 f"{i}. <b>{c.get('name','')}</b> (@{c.get('username','')})\n"
                 f"   👥 {int(c.get('followers', 0)):,} | 🎬 {int(c.get('reels_count', 0))} reels | "
                 f"👁 {int(c.get('avg_views', 0)):,} avg views\n"
                 f"   ❤️ {int(c.get('avg_likes', 0)):,} | 💬 {int(c.get('avg_comments', 0)):,} | "
                 f"📊 ER {float(c.get('engagement_rate', 0)):.2f}% | 🔝 {int(c.get('best_views', 0)):,}\n"
-                f"   🔌 API: {c.get('api_used','unknown')}"
+                f"   🔌 API: {c.get('api_used','unknown')}\n"
+                f"   📌 Recent reels:{reels_block}"
             )
 
+        body = "\n\n".join(lines)
         msg = (
             f"⏱ <b>HOURLY CREATOR DIGEST</b>\n"
             f"Window: every {interval_hours} hour(s)\n"
             f"Creators: {total} | Part {idx}/{len(chunks)}\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"{"\n\n".join(lines)}\n"
+            f"{body}\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
             f"⏰ {_now_ist()}"
         )

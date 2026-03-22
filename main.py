@@ -24,6 +24,7 @@ load_dotenv()
 from config import (
     CREATORS, SCRAPE_REELS_COUNT, validate_env,
     SCRAPE_INTERVAL_HOURS, ENABLE_HOURLY_DIGEST, TELEGRAM_DIGEST_CHUNK_SIZE,
+    TELEGRAM_DIGEST_REELS_PER_CREATOR,
 )
 from scrapers.instagram_client import scrape_all_creators
 from processors.metrics import calculate_creator_metrics
@@ -57,6 +58,17 @@ def log(msg: str) -> None:
     print(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}", flush=True)
 
 
+def _reel_topic(caption: str) -> str:
+    if not caption:
+        return "No caption"
+    text = str(caption).strip().replace("\n", " ")
+    for sep in [".", "!", "?"]:
+        idx = text.find(sep)
+        if 0 < idx <= 100:
+            return text[:idx].strip()
+    return text[:100].strip()
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # JOB 1 — Every 6 hours: Instagram scrape + anomaly detection + alerts
 # ═══════════════════════════════════════════════════════════════════════════
@@ -85,6 +97,19 @@ def run_scrape_job() -> None:
 
             # Compute metrics
             metrics = calculate_creator_metrics(profile, reels)
+            reels_sorted = sorted(reels, key=lambda r: str(r.get("timestamp", "")), reverse=True)
+            reel_details = []
+            for reel in reels_sorted[:max(1, TELEGRAM_DIGEST_REELS_PER_CREATOR)]:
+                reel_details.append({
+                    "topic": _reel_topic(reel.get("caption", "")),
+                    "posted_at": reel.get("timestamp", ""),
+                    "views": int(reel.get("videoViewCount", 0) or 0),
+                    "likes": int(reel.get("likesCount", 0) or 0),
+                    "comments": int(reel.get("commentsCount", 0) or 0),
+                    # Share count is not exposed consistently by current providers.
+                    "shares": reel.get("shareCount", "N/A"),
+                    "url": reel.get("reel_url", ""),
+                })
             creator_digest_rows.append({
                 "name": name,
                 "username": username,
@@ -96,6 +121,7 @@ def run_scrape_job() -> None:
                 "engagement_rate": metrics.get("engagement_rate", 0),
                 "best_views": (metrics.get("best_reel") or {}).get("videoViewCount", 0),
                 "api_used": api_used,
+                "reel_details": reel_details,
             })
 
             # Get historical data for anomaly comparison

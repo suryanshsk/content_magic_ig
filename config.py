@@ -45,6 +45,7 @@ ENABLE_HOURLY_DIGEST     = os.getenv("ENABLE_HOURLY_DIGEST", "1").strip().lower(
     "0", "false", "no"
 )
 TELEGRAM_DIGEST_CHUNK_SIZE = int(os.getenv("TELEGRAM_DIGEST_CHUNK_SIZE", "10"))
+TELEGRAM_DIGEST_REELS_PER_CREATOR = int(os.getenv("TELEGRAM_DIGEST_REELS_PER_CREATOR", "2"))
 
 # ── NICHE KEYWORDS ──────────────────────────────────────────────────────────
 NICHE_KEYWORDS = [
