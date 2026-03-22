@@ -8,6 +8,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Scraper mode: "rapidapi_only" (no Apify calls) or "hybrid" (Apify + RapidAPI fallback)
+SCRAPER_MODE = os.getenv("SCRAPER_MODE", "rapidapi_only").strip().lower()
+
 # ── API KEYS ────────────────────────────────────────────────────────────────
 APIFY_API_TOKEN        = os.getenv("APIFY_API_TOKEN", "")
 APIFY_ACTOR_ID         = "apify/instagram-scraper"
@@ -126,12 +129,13 @@ CREATORS = [
 def validate_env():
     """Call this at startup. Raises ValueError listing any missing keys."""
     required = {
-        "APIFY_API_TOKEN":    APIFY_API_TOKEN,
         "RAPIDAPI_KEY":       RAPIDAPI_KEY,
         "TELEGRAM_BOT_TOKEN": TELEGRAM_BOT_TOKEN,
         "TELEGRAM_CHAT_ID":   TELEGRAM_CHAT_ID,
         "ANTHROPIC_API_KEY":  ANTHROPIC_API_KEY,
     }
+    if SCRAPER_MODE != "rapidapi_only":
+        required["APIFY_API_TOKEN"] = APIFY_API_TOKEN
     missing = [k for k, v in required.items() if not v]
     if missing:
         raise ValueError(

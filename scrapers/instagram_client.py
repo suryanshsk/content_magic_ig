@@ -6,7 +6,7 @@ Automatically falls back from Apify to RapidAPI on quota or any error.
 
 import time
 from datetime import datetime
-from config import CREATORS, SLEEP_BETWEEN_CREATORS
+from config import CREATORS, SLEEP_BETWEEN_CREATORS, SCRAPER_MODE
 
 from scrapers.apify_scraper import (
     scrape_profile as _apify_profile,
@@ -30,8 +30,10 @@ def get_profile(username: str) -> dict | None:
     Fetch Instagram profile. Tries Apify first, falls back to RapidAPI.
     Returns standardised profile dict or None if both fail.
     """
+    if SCRAPER_MODE == "rapidapi_only":
+        _log("RapidAPI-only mode active — skipping Apify")
     # ── Try Apify first ──────────────────────────────────────────────────────
-    if should_use_apify():
+    elif should_use_apify():
         try:
             return _apify_profile(username)
         except ApifyQuotaError as e:
@@ -66,8 +68,10 @@ def get_reels(username: str, count: int = 12) -> list:
     Fetch recent reels. Tries Apify first, falls back to RapidAPI.
     Returns list of standardised reel dicts (may be empty).
     """
+    if SCRAPER_MODE == "rapidapi_only":
+        _log("RapidAPI-only mode active — skipping Apify")
     # ── Try Apify first ──────────────────────────────────────────────────────
-    if should_use_apify():
+    elif should_use_apify():
         try:
             apify_reels = _apify_reels(username, count)
             if apify_reels:
@@ -111,7 +115,10 @@ def get_full_creator_data(username: str, count: int = 12) -> dict | None:
         return None
 
     reels = get_reels(username, count)
-    api_used = "apify" if should_use_apify() else "rapidapi"
+    if SCRAPER_MODE == "rapidapi_only":
+        api_used = "rapidapi"
+    else:
+        api_used = "apify" if should_use_apify() else "rapidapi"
 
     return {
         "profile":    profile,
