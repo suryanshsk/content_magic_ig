@@ -29,7 +29,9 @@ def _log(msg: str) -> None:
 
 def _run_actor(input_data: dict, timeout_secs: int = 180) -> str:
     """Start an actor run and return the run_id."""
-    url = f"{BASE}/acts/{APIFY_ACTOR_ID}/runs"
+    # Apify API expects owner~actor format in endpoint path.
+    actor_id = APIFY_ACTOR_ID.replace("/", "~")
+    url = f"{BASE}/acts/{actor_id}/runs"
     params = {"token": APIFY_API_TOKEN}
     r = requests.post(url, json=input_data, params=params, timeout=30)
     if r.status_code not in (200, 201):
